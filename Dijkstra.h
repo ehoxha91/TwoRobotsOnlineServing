@@ -1,7 +1,16 @@
+/* 
+   Author  :   Ejup Hoxha 
+   Semester:   Fall 2018 - 
+   Class   :   Advanced Algorithms - Dr. Peter Brass
+   University: City University of New York - Groove School of Engineering
+*/
+
 #define NOTVISITED 0
 #define EXPLORED 1
 #define FINISHED 2
 #define INF 9999.0
+
+//#define PRINT
 
 void initDijkstra(int rbid);
 void GetNeighbourId(struct vertice current_v);
@@ -21,9 +30,9 @@ int neighbourids[200];
 int roadToSuccess_r1[200];
 int roadToSuccess_r2[200];
 
-double Dijkstra(int _robotid){   
-	//For first robot:
-	initDijkstra(_robotid);				   /* Set visited[i] = NOTVISITED and distance[i] = INF. */
+double Dijkstra(int _robotid)
+{   
+	initDijkstra(_robotid);				   	/* Set visited[i] = NOTVISITED and distance[i] = INF. */
 	int prev[200];
 	for (int op = 0; op < 200; op++)
 	{
@@ -35,13 +44,13 @@ double Dijkstra(int _robotid){
 	else if(_robotid == 2) _robotnode = movingnodes_id[1];
 	else printf("\nRobot ID is wrong, re-check it!\n");
 		
-	start_node = graphlist[_robotnode]; /* Current position of the robot1 as a node on our graph. */
-	current_node = start_node;
+	start_node = graphlist[_robotnode]; 			/* Current position of the robot1 as a node on our graph. */
+	current_node = start_node;				/* We will use current_node for calculations. */
 	
-	distance[_robotnode] = 0; 	   /* Distance from start to start is 0. */
-	finished[_robotnode] = FINISHED;	   /* Mark current node as finished. */
+	distance[_robotnode] = 0; 	   			/* Distance from start to start is 0. */
+	finished[_robotnode] = FINISHED;	   		/* Mark current node as finished. */
 
-	end_node = graphlist[movingnodes_id[2]];   /* Current request position as a node on our graph. */
+	end_node = graphlist[movingnodes_id[2]];   		/* Current request position as a node on our graph. */
 	
 	int loopcount = 0;
 	while (loopcount <= movingnodes_id[2])			/* When all are checked just return the result. */
@@ -51,7 +60,7 @@ double Dijkstra(int _robotid){
 		{
 			if (finished[neighbourids[i]] != FINISHED)
 			{
-				double dist = distance[current_node.v_id] + current_node.weight[neighbourids[i]]; //distance[i] = distance[current,i] + distance[current]
+				double dist = distance[current_node.v_id] + current_node.weight[neighbourids[i]];
 				if (distance[neighbourids[i]] > dist)
 				{
 					distance[neighbourids[i]] = dist;
@@ -102,7 +111,7 @@ void GetNeighbourId(struct vertice current_v)
 		if (i != current_v.v_id)
 			if (current_v.neighbours[i] == 1 && finished[i] != FINISHED)
 			{
-				numberofneighbours++; /* To lower the number of iteration on main func. */
+				numberofneighbours++; 			/* To lower the number of iteration on main func. */
 				neighbourids[numberofneighbours] = i;	/* Just add id-s in order. */
 			}
 	}
@@ -129,7 +138,7 @@ void GetSequence(int hist[], int _rbid)
 	if(_rbid ==1 )
 	{
 		roadToSuccess_r1[1] = end_node.v_id;
-		int seqcounter = 2;	/* There's reason for everything. */
+		int seqcounter = 2;					/* There's reason for everything. Forgive me. */
 		while (1)
 		{
 			roadToSuccess_r1[seqcounter] = hist[s];
@@ -141,12 +150,12 @@ void GetSequence(int hist[], int _rbid)
 				break;
 			}
 		}
-		roadToSuccess_r1[0] = seqcounter - 1; //On this position we write how many steps we needed.
+		roadToSuccess_r1[0] = seqcounter - 1; 			/* On this position we write how many steps we needed. */
 	}
 	else
 	{
 		roadToSuccess_r2[1] = end_node.v_id;
-		int seqcounter = 2;	/* There's reason for everything. */
+		int seqcounter = 2;
 		while (1)
 		{
 			roadToSuccess_r2[seqcounter] = hist[s];
@@ -158,7 +167,7 @@ void GetSequence(int hist[], int _rbid)
 				break;
 			}
 		}
-		roadToSuccess_r2[0] = seqcounter - 1; //On this position we write how many steps we needed.
+		roadToSuccess_r2[0] = seqcounter - 1;
 	}
 
 }

@@ -16,14 +16,20 @@
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
-#include "HelperFile.h"
-#include "GraphGenerator001.h"	/* Manipulations with graph. */
-#include "Dijkstra.h"
+#include "HelperFile.h"			/* Few linked lists used primarly for drawings and logging. */
+#include "GraphGenerator001.h"		/* Manipulations with graph. */
+#include "Dijkstra.h"			/* Dijkstra algorithm for this problem. */
 
-//#define DEBUG
-#define DRAWNODES
-//#define PRINT
-//#define SIMULATEDGRAPH
+//#define DEBUG				/* Forget that this egzists*/
+#define DRAWNODES			/* If we want to draw nodes of our graph. */
+//#define PRINT				/* This one is not needed neither. */
+//#define SIMULATEDGRAPH		/* If you don't have a text file ready.*/
+//#define ZOOM 1.2			/* Good idea but not implemented. */
+
+#define DisstanceDifference -0.9	/* If we carea about difference in total traveled distance we make this one lower. */
+#define DistanceWeight 0.3		/* If we care about traveled distance of the robot we increase this one*/
+#define DistanceHighBorder 300		/* Distance high border and low border are borders and if we stay within these borders*/
+#define DistanceLowBorder 10		/* distance is weighted with positive value, othervise is used as contra-weight. */
 
 #define XBORDER 700
 #define YBORDER 485
@@ -43,11 +49,11 @@ XWMHints *wm_hints;
 XClassHint *class_hints;
 XSizeHints *size_hints;
 XTextProperty win_name, icon_name;
-char *win_name_string = "Two Robots - Online, k=2 Server Problem";
+char *win_name_string = "Two Robots - Online, K=2 Server Problem";
 char *icon_name_string = "Icon For Window";
 
-KeySym keyR;		/* a dealie-bob to handle KeyPress Events */	
-char pb_txt[255];	/* a char buffer for KeyPress Events */
+KeySym keyR;				/* a dealie-bob to handle KeyPress Events */	
+char pb_txt[255];			/* a char buffer for KeyPress Events */
 
 XEvent report;
 
@@ -71,25 +77,24 @@ unsigned long valuemask = 0;
 #define R2_s_x 600
 #define R2_s_y 450
 
-
 struct Robot robot1 = {1, R1_s_x, R1_s_y, ROBOT_HEIGHT, ROBOT_WIDTH, 0.0, NULL};
 struct Robot robot2 = {2, R2_s_x, R2_s_y, ROBOT_HEIGHT, ROBOT_WIDTH, 0.0, NULL};
 
 void Robot_work(struct Pxy _reqpointxy);	/* Decision maker. Algorithm which decides which robot should move. */
+double AssumeMovement(int _rmovedid);		/* Check our situation in the future if we move robot with id=_rmovedid. */
 void AddRobotNode();				/* Adds two nodes in the nodelist.*/
-void AddReqNode(struct Pxy _pxy); 	/* Add request point as a node in the existing graph. */
-void UpdateMovingNodes(struct Pxy _pxy); /* When we call UpdateGraph, we also call this function to update moving nodes pos. */
-void CreateGraph();					/* First time we create the graph. */
-void UpdateGraph(struct Pxy _pxy);	/* We have to update position of robot1, robot2 and request point each time. */
-void initVar();
-void Move(int);
-void move_n_draw(int);					/* After we decide which robot to move, we call this function to do the movement and drawing. */
-void drawRobotText(int rid);
-void DrawDetails();
-void about_info();
+void AddReqNode(struct Pxy _pxy); 		/* Add request point as a node in the existing graph. */
+void UpdateMovingNodes(struct Pxy _pxy);	/* When we call UpdateGraph, we also call this function to update moving nodes pos. */
+void CreateGraph();				/* First time we create the graph. */
+void UpdateGraph(struct Pxy _pxy);		/* We have to update position of robot1, robot2 and request point each time. */
+void initVar();		
+void Move(int);					/* Move the robot to the request point. */
+void move_n_draw(int);				/* Draw and calculate after we called Move(int). */
+void drawRobotText(int rid);			/* Update text for info. */
+void DrawDetails();				/* Draw some more details. */
+void about_info();				/* Re/Draw info about our program. */
 
 /* Drawing Functions */
-#define ZOOM 1.2
 void GetColors();	
 void Re_Draw();
 int drw_rp = 0;
@@ -108,12 +113,10 @@ void ClearArea(int _psx, int _psy, int _wclear, int _hclear, int _riseExposeEven
 void SimulateReadingFile();
 #endif
 
-/* Convert text file to segment function. */
-void text_to_segment(char * _buf, int seg_id);
+void text_to_segment(char * _buf, int seg_id); /* Convert text file to segment function. */
 
 int main(int argc, char **argv)
 {
-	//robot1.n_rob = &robot2;	//Link robots;
 	FILE *ptr_file;
 	char *buf = malloc(200*20);
 	ptr_file = fopen(argv[1], "r"); 
@@ -215,6 +218,7 @@ int main(int argc, char **argv)
 						draw_request(green, _pxy.x, _pxy.y, 0);	/* Draw request point. */
 						drw_rp =1;
 						Robot_work(_pxy);
+						Re_Draw();
 					}
 				}
 				else exit(-1);
@@ -223,7 +227,7 @@ int main(int argc, char **argv)
 			case KeyPress:
 			{	
 				XLookupString(&report.xkey,pb_txt,255,&keyR,0);
-				if(pb_txt[0] == 'e') /* Expos Simulation. */
+				if(pb_txt[0] == 'e') /* Expose Simulation. */
 				{
 					ClearArea(0, 0, win_width, win_height, 1);
 				}
@@ -298,16 +302,14 @@ void UpdateMovingNodes(struct Pxy _pxy)
 	nodelist[movingnodes_id[0]].v_px = robot1.r_px;
 	nodelist[movingnodes_id[0]].v_py = robot1.r_py;
 }
-/* ************************************** */
-/* END: Graph Generator/Helper functions. */
-/* ************************************** */
+
+#pragma region Algorithm Functions
 
 double lastCost[2] = {0,0};
-double cost_robot[2] = {0,0};
-double distanceDifference = 0;
-float distance_r1_r2;	 /* Distance between robot 1 and 2. */
-double afterdistance[2]; /* Distance between robots if we choose one. 0= robot1, 1=robot2. */
-struct Pxy _nextrequest; /* Prediction of next request point. MSE?? */
+double cost_robot[2] = {0,0}; 		/* Calculated cost from robot to requested point. */
+double distanceDifference = 0; 		/* Traveled distance difference dR = |dR1-dR2|. */
+float distance_r1_r2;	 		/* Distance between robot 1 and 2. */
+struct Pxy _nextrequest; 		/* Prediction of next request point. MSE?? */
 int rts_robot1[200], rts_robot2[200];	/* So we can draw the road to success after we decide which robot to move. */
 
 
@@ -323,7 +325,7 @@ void move_n_draw(int robid)
 		int id1 =roadToSuccess_r1[1];
 		ver2 = graphlist[id1];
 		
-		struct Pxy nposxy = {ver2.v_px, ver2.v_py};	//New Robot position.
+		struct Pxy nposxy = {ver2.v_px, ver2.v_py};
 		
 		#ifdef PRINT
 		printf("\n[");
@@ -344,10 +346,9 @@ void move_n_draw(int robid)
 			
 			ver2 = ver1;
 		}
-		draw_robot(blue, robot1.r_px, robot1.r_py, robot1.r_height, robot1.r_width);			/* Draw the ghost of robot 1. */
 		robot1.r_px = nposxy.x;
 		robot1.r_py = nposxy.y;
-		draw_robot(blue, robot1.r_px, robot1.r_py, robot1.r_height, robot1.r_width);
+		//draw_robot(blue, robot1.r_px, robot1.r_py, robot1.r_height, robot1.r_width);
 		
 		robot1.distance_trv += cost_robot[0];
 		lastCost[0] = cost_robot[0];
@@ -383,10 +384,11 @@ void move_n_draw(int robid)
 			
 			ver2 = ver1;
 		}
-		draw_robot(orange_shadow, robot2.r_px, robot2.r_py, robot2.r_height, robot2.r_width);	/* Draw the ghost of robot 2. */
+
 		robot2.r_px = nposxy.x; 
 		robot2.r_py = nposxy.y;
-		draw_robot(orange, robot2.r_px, robot2.r_py, robot2.r_height, robot2.r_width);			/* Draw actual position of robot 2. */
+		/* We don't need to draw it now, we decided to use ReDraw(). */
+		//draw_robot(orange, robot2.r_px, robot2.r_py, robot2.r_height, robot2.r_width);			/* Draw actual position of robot 2. */
 		
 		robot2.distance_trv += cost_robot[1];
 		lastCost[1] = cost_robot[1];
@@ -395,8 +397,6 @@ void move_n_draw(int robid)
 		printf("] \nActual Robot's Position: [%d,%d]\n", nposxy.x, nposxy.y);
 		#endif
 	}
-
-	//drawRobotText(robid);
 }
 
 void Robot_work(struct Pxy _reqpointxy)
@@ -406,9 +406,48 @@ void Robot_work(struct Pxy _reqpointxy)
 	cost_robot[0] = Dijkstra(1);
 	cost_robot[1] = Dijkstra(2);
 	distance_r1_r2 = calcostnodes(graphlist[movingnodes_id[0]], graphlist[movingnodes_id[1]]);
+	double movement1 = AssumeMovement(1); 	/* Weight movement of robot1. */
+	double movement2 = AssumeMovement(2); 	/* Weight movement of robot2. */
+	if(movement1 >movement2)		/* Choose the best possible. */
 	Move(1);
-	//Move(2);
+	else
+	Move(2);
+	
 	DrawDetails();
+}
+
+double disdiffWeight = DisstanceDifference; 	/* Total traveled distance difference weight. */
+double distWeight = DistanceWeight;
+double simdistHighBorder = DistanceHighBorder;	/* If we will have a larger/smaller distance between robots, */
+double simdisLowBorder = DistanceLowBorder;	/* then change the sign of weight, contribute the countrary. */
+
+double AssumeMovement(int _rmovedid)
+{
+	double weightofmovement = 0.0;  	/* We will give a weight for each movement. Simple step neuron. */
+	double sim_td_diff = 0.0; 	    	/* Difference in total traveled distance if we assume to do one movement. */
+	double simdistance = 0.0;
+	switch (_rmovedid)
+	{
+		case 1:
+			simdistance = cost_robot[1];
+			sim_td_diff = robot1.distance_trv + cost_robot[0] - robot2.distance_trv;
+			if(sim_td_diff < 0) sim_td_diff *= (-1);
+			break;
+		case 2:
+			simdistance = cost_robot[0];
+			sim_td_diff = robot2.distance_trv + cost_robot[1] - robot1.distance_trv;
+			if(sim_td_diff < 0) sim_td_diff *= (-1);
+			break;
+		default:
+			break;
+	}
+	if(simdistance > simdistHighBorder)
+	simdistance *=(-1);
+	else if(simdistance < simdisLowBorder)
+	simdistance *=(-1);
+
+	weightofmovement = disdiffWeight* sim_td_diff + distWeight*simdistance;
+	return weightofmovement;
 }
 
 void Move(int _robotid)
@@ -458,13 +497,17 @@ void DrawDetails()
 
 void initVar()
 {
-	afterdistance[0] =0; afterdistance[1] =0;
 	for(int li = 0; li < 200; li++){ rts_robot1[li] = -30; rts_robot2[li] = -30; }
 }
+
+#pragma endregion
+
 
 /* ****************************************** */
 /* Drawing functions of segments, robots etc. */
 /* ****************************************** */
+
+#pragma region Re/Drawing functions
 void Re_Draw()
 { 
 	DrawDetails();
@@ -487,8 +530,8 @@ void Re_Draw()
 		GC col_;
 		
 		int hr, wr =0;
-		if(t_road->rob_id == 1) {  col_ = blue; hr = robot1.r_height; wr =robot1.r_width; }
-		else { col_ = orange_shadow;  hr = robot2.r_height; wr =robot2.r_width;}
+		if(t_road->rob_id == 1) {  col_ = blue_2; hr = robot1.r_height; wr =robot1.r_width; }
+		else { col_ = orange_2;  hr = robot2.r_height; wr =robot2.r_width;}
 		
 		if(t_road != NULL)
 		{  
@@ -584,7 +627,7 @@ void drawint(GC _scolor, int sposx, int sposy, int inttodraw)
 void drawdouble(GC _scolor, int sposx, int sposy, double inttodraw)
 {
 		char outtxt[50];
-		sprintf(outtxt,"%f", inttodraw);
+		sprintf(outtxt,"%.2f", inttodraw);
 		char *tx = outtxt;
 		drawstring(_scolor, sposx, sposy, tx);
 }
@@ -593,63 +636,6 @@ void drawdouble(GC _scolor, int sposx, int sposy, double inttodraw)
 void ClearArea(int _psx, int _psy, int _wclear, int _hclear, int _riseExposeEvent)
 {
 	XClearArea(display_ptr, win, _psx, _psy, _wclear, _hclear, _riseExposeEvent);
-}
-
-/* Read segments from file and add them to the linked list.
-
-   TODO: We need to implement the format check and return
-         an error if the format of the file isn't right. */
-
-void text_to_segment(char * _buf, int seg_id)
-{
-	int _x_count = -1;	/* Start from 1st segment. */
-	int _y_count = -1;	/* Start from 1st segment. */
-	int _x[2];		/* x coordinates corresponding to segment number.*/
-	int _y[2];		/* y coordinates corresponding to segment number.*/
-	char tmp[30];
-	char tmp_y[30];
-	for(int k = 0; k<=strlen(_buf); k++)
-	{
-		if(_buf[k] == '(')
-		{
-		    if(_buf[k+1] != ',')
-		    {
-			k++;
-			tmp[0] = _buf[k];
-		        if(_buf[k+1] != ',')
-			{
-			    k++; tmp[1] = _buf[k]; 
-			    if(_buf[k+1] != ',')
-			    {
-				k++; tmp[2] = _buf[k];
-				if(_buf[k+1] != ',')
-				{ k++; tmp[3] = _buf[k];}
-			    }
-			}
-   		     }
-	            _x_count ++;
-		    _x[_x_count] = atoi(tmp); 
-		}
-		else if(_buf[k]==',')
-		{     k++;
-		      tmp_y[0] = _buf[k];
-		      if(_buf[k+1] != ')')
-		      {
-			  k++; tmp_y[1] = _buf[k]; 
-			  if(_buf[k+1] != ')')
-			  {
-			     k++; tmp_y[2] = _buf[k];
-			     if(_buf[k+1] != ')')
-			     { 
-				k++; tmp_y[3] = _buf[k];
-			     }	  for(int l55 =0; l55<count_edges;l55++) 
-		draw_segment(white, l55,1);
-			}
-		      }
-   		     _y_count++; _y[_y_count] = atoi(tmp_y); 
-		} 
-	}
-	AddSegment(seg_id, _x[0], _y[0], _x[1], _y[1]);
 }
 
 void about_info()
@@ -661,6 +647,18 @@ void about_info()
 	drawstring(blue, 708, 45, "Last Travel Cost: ");
 	drawstring(orange_shadow, 708, 60, "Last Travel Cost: ");
 	drawstring(green, 708, 75, "Travel difference: ");
+
+	XDrawRectangle(display_ptr, win, wallcolor, 705, 85, 190, 80);
+	drawstring(white, 708, 100, "WEIGHTS OF PREDICTION: ");
+	drawstring(white, 708, 115, "Travel Diff. Weight    : ");
+	drawstring(white, 708, 130, "Distance Between Weight: ");
+	drawstring(white, 708, 145, "High Border D. Weight  : ");
+	drawstring(white, 708, 160, "Low Border D. Weight   : ");
+	drawdouble(green,860,115, disdiffWeight);
+	drawdouble(green,860,130, distWeight);
+	drawint(green,860,145, (int)simdistHighBorder);
+	drawint(green,860,160, (int)simdisLowBorder);
+
 	
 	XDrawRectangle(display_ptr,win,white,705,405,190,80);
 	drawstring(white, 708, 420, "Graph Search - Dijkstra");
@@ -670,6 +668,7 @@ void about_info()
 	drawstring(green, 708, 480, "Author: Ejup Hoxha");
 }
 
+/* Initialize colors which we will mostly use. */
 void GetColors(){
 	/* To be able to draw on this window we need to create graphics context. */
 	gc = XCreateGC(display_ptr, win, valuemask, &gc_values);
@@ -820,7 +819,175 @@ void GetColors(){
 
 }
 
+#pragma endregion
+
+#pragma region INPUT Decoding
+
+void CheckStringType(char tmpstr[], int lencheck)
+{
+	char lastchar;
+	for(int strcount = 0; strcount <lencheck; strcount++)
+	{
+		
+		switch (tmpstr[strcount])
+		{
+			case '0':
+				lastchar = '0';
+				break;
+			case '1':
+				lastchar = '0';
+				break;
+			case '2':
+				lastchar = '0';
+				break;
+			case '3':
+				lastchar = '0';
+				break;
+			case '4':
+				lastchar = '0';
+				break;
+			case '5':
+				lastchar = '0';
+				break;
+			case '6':
+				lastchar = '0';
+				break;
+			case '7':
+				lastchar = '0';
+				break;
+			case '8':
+				lastchar = '0';
+				break;
+			case '9':
+				lastchar = '0';
+				break;
+			case '(':
+				if(lastchar == '(')
+				{
+					printf("Bad format.\nDouble '%c' find and remove it\n", tmpstr[strcount]);
+					exit(-1);
+				}
+				else if(lastchar == ')' ||lastchar == ',')
+				{
+					printf("Bad format.\nUnspecified error.\n");
+					exit(-1);
+				}
+				lastchar = tmpstr[strcount];
+				break;
+			case ')':
+				if(lastchar == ')')
+				{
+					printf("Bad format.\nDouble '%c' find and remove it\n", tmpstr[strcount]);
+					exit(-1);
+				}
+				else if(lastchar == '(' || lastchar == ',' || lastchar == '-')
+				{
+					printf("Bad format.\nUnspecified error.\n");
+					exit(-1);
+				}
+				lastchar = tmpstr[strcount];
+				break;
+			case '-':
+				if(lastchar == '-')
+				{
+					printf("Bad format.\nDouble '%c' find and remove it\n", tmpstr[strcount]);
+					exit(-1);
+				}	
+				else if(lastchar == '(' || lastchar == ',')
+				{
+					printf("Bad format.\nUnspecified error.\n");
+					exit(-1);
+				}			
+				lastchar = tmpstr[strcount];
+				break;
+			case ',':
+				if(lastchar == ',')
+				{
+					printf("Bad format.\nDouble '%c' find and remove it\n", tmpstr[strcount]);
+					exit(-1);
+				}
+				else if(lastchar == '(' || lastchar == ')' || lastchar == '-')
+				{
+					printf("Bad format.\nUnspecified error.\n");
+					exit(-1);
+				}
+				
+				lastchar = tmpstr[strcount];
+				break;
+			case '\n':
+				lastchar = tmpstr[strcount];	
+				break;
+			default:
+				printf("Bad format.\nFind this character '%c' and remove it\n", tmpstr[strcount]);
+				printf("Spaces and tabs aren't allowed.\n");
+				exit(-1);
+				break;
+		}
+	}
+	
+}
+void text_to_segment(char * _buf, int seg_id)
+{
+	int _x_count = -1;	/* Start from 1st segment. */
+	int _y_count = -1;	/* Start from 1st segment. */
+	int _x[2] = { 0, 0};/* x coordinates corresponding to segment number.*/
+	int _y[2] = {0 ,0};		/* y coordinates corresponding to segment number.*/
+	char tmp[30];
+	char tmp_y[30];
+	
+	CheckStringType(_buf,strlen(_buf));
+	for(int k = 0; k<=strlen(_buf); k++)
+	{
+		if(_buf[k] == '(')
+		{
+		    if(_buf[k+1] != ',')
+		    {
+				k++;
+				tmp[0] = _buf[k];
+				if(_buf[k+1] != ',')
+				{
+					k++; tmp[1] = _buf[k]; 
+					if(_buf[k+1] != ',')
+					{
+						k++; tmp[2] = _buf[k];
+						if(_buf[k+1] != ',')
+						{ k++; tmp[3] = _buf[k];}
+					}
+				}
+   		    }
+	        _x_count ++; _x[_x_count] = atoi(tmp); 
+		}
+		else if(_buf[k]==',')
+		{     k++;
+		      tmp_y[0] = _buf[k];
+		      if(_buf[k+1] != ')')
+		      {
+				k++; tmp_y[1] = _buf[k]; 
+				if(_buf[k+1] != ')')
+				{
+					k++; tmp_y[2] = _buf[k];
+					if(_buf[k+1] != ')')
+					{ 
+							k++; tmp_y[3] = _buf[k];
+					}	  
+				}
+		      }
+   		     _y_count++; _y[_y_count] = atoi(tmp_y); 
+		}
+	}
+	if(_x[0] >XBORDER || _x[1] >XBORDER || _y[0] > YBORDER || _y[1] >YBORDER)
+	{
+		printf("Segment coordinates outside the borders!");
+		printf("\nBe aware that segments should fit inside: [%d x %d]",XBORDER, YBORDER);
+		printf("\nCheck input file!\n");
+		exit(-1);
+	}
+	AddSegment(seg_id, _x[0], _y[0], _x[1], _y[1]);
+}
+
 #ifdef SIMULATEDGRAPH
+/* Simulate reading from file. 
+   When you don't wanna use readings from file. */
 void SimulateReadingFile()
 {
 	AddSegment(0, 40, 40, 140, 40);
@@ -850,19 +1017,4 @@ void SimulateReadingFile()
 }
 #endif
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+#pragma endregion

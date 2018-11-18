@@ -1,3 +1,10 @@
+/* 
+   Author  :   Ejup Hoxha 
+   Semester:   Fall 2018 - 
+   Class   :   Advanced Algorithms - Dr. Peter Brass
+   University: City University of New York - Groove School of Engineering
+*/
+
 #define CCW -1
 #define CW 1
 #define COLINEAR 0
@@ -65,7 +72,6 @@ void CreateNodes()
 		newnode.neighbours[p0] = 0;
 
 		nodelist[newnode.v_id] = newnode;
-		//if(_n==0)printf("\nNode- Create Nodes[0]=[%d,%d]",nodelist[_n].v_px, nodelist[_n].v_py);
 		if(ftn ==1 && _n==0) problematiknode = newnode;
 		ftn =0;
 		nodeid++;
@@ -185,8 +191,6 @@ int CheckIntersection(struct Seg _seg1, struct Seg _seg2)	/* Check intersection 
 	else
 	{ return COLINEAR; }
 }
-
-//#define DRAWEDGES
 
 int CheckConnections(struct Seg _refSeg1)
 {
