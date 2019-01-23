@@ -1,5 +1,7 @@
 # TwoRobotsOnlineServing
 
+Compile line:  gcc -o outputfile TwoRobots_001.c -lX11 -lm -L/usr/X11R6/lib
+
 This project is a solution of two-robot online optimization problem(k-server online problem).
 I have some obstacles, that I give the program as an input file of a certain format (xxx,yyy),(xxx,yyy) and I call the file as'./a.out input.in'.
 These segments form obstacles of the map. Robots will always avoid them. When we click with the left mouse button program will receive it as a 
