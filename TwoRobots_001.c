@@ -119,7 +119,7 @@ int main(int argc, char **argv)
 {
 	FILE *ptr_file;
 	char *buf = malloc(200*20);
-	ptr_file = fopen(argv[1], "r"); 
+	ptr_file = fopen(argv[1], "rb+"); 
 	if(!ptr_file)
 		return 1;
 	int _sg_id = 0;
